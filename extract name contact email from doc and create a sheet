@@ -1,0 +1,74 @@
+import os
+import re
+import docx2txt
+import openpyxl
+import zipfile
+
+# Function to extract details from text
+def extract_details(text):
+    details = {
+        'Name': [],
+        'Phone Numbers': [],
+        'Contact Numbers': [],
+        'Emails': []
+    }
+
+    # Extract names (assuming the name appears in the first line)
+    name_match = re.search(r'^[A-Za-z\s]+', text)
+    if name_match:
+        details['Name'].append(name_match.group())
+
+    # Extract phone numbers
+    phone_pattern = re.compile(r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b')
+    details['Phone Numbers'] = phone_pattern.findall(text)
+
+    # Extract contact numbers with country codes (e.g., +1 1234567890)
+    contact_pattern = re.compile(r'\+\d+\s\d+[-.\s]?\d+')
+    details['Contact Numbers'] = contact_pattern.findall(text)
+
+    # Extract email addresses
+    email_pattern = re.compile(r'\S+@\S+')
+    details['Emails'] = email_pattern.findall(text)
+
+    return details
+
+# Input directory containing text and DOC/DOCX files
+input_folder = r'Folder_path'
+
+# Create a new Excel workbook and add a worksheet
+workbook = openpyxl.Workbook()
+worksheet = workbook.active
+
+# Set the headers for the columns
+headers = ['File Name', 'Name', 'Phone Numbers', 'Contact Numbers', 'Emails']
+worksheet.append(headers)
+
+# Process each file in the folder
+for filename in os.listdir(input_folder):
+    if filename.endswith(('.txt', '.docx', '.doc')):
+        file_path = os.path.join(input_folder, filename)
+
+        if filename.endswith('.txt'):
+            with open(file_path, 'r', encoding='utf-8') as file:
+                text = file.read()
+        elif filename.endswith('.docx') or filename.endswith('.doc'):
+            try:
+                text = docx2txt.process(file_path)
+            except (KeyError, zipfile.BadZipFile) as e:
+                print(f"Error processing file: {file_path}")
+                continue  # Skip this file and proceed to the next one
+
+        details = extract_details(text)
+
+        # Create a list of values to be added to the worksheet
+        values = [filename]
+        for key in headers[1:]:
+            values.append(', '.join(details[key]))
+
+        # Add the values to the worksheet
+        worksheet.append(values)
+
+# Save the workbook to a file
+workbook.save('extracted_details.xlsx')
+
+print("Extraction completed. Results saved to 'extracted_details.xlsx'")
